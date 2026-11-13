@@ -1,0 +1,23 @@
+{
+  "name": "ucop-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "UCOP.simulator — mesa virtual de RPG (Ordem Paranormal) com tabuleiro em tempo real",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w @ucop/server\" \"npm run dev -w @ucop/web\"",
+    "build": "npm run build -w @ucop/web",
+    "start": "npm run start -w @ucop/server",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,20 @@
+# Dependências e builds
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Dados locais do servidor (SQLite + uploads)
+apps/server/data/
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Worktrees de outro repositório (não versionar)
+.claude/worktrees/
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+*.log
