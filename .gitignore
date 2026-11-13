@@ -1,6 +1,9 @@
 # Dependências e builds
 node_modules/
 dist/
+build/
+release/
+tools/
 *.tsbuildinfo
 
 # Dados locais do servidor (SQLite + uploads)

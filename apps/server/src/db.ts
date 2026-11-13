@@ -1,12 +1,28 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { DATA_DIR, UPLOADS_DIR } from './config';
+import { APP_DIR, DATA_DIR, PACKAGED, UPLOADS_DIR } from './config';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-export const db = new Database(path.join(DATA_DIR, 'ucop.sqlite'));
+/**
+ * Dentro do UCOP.exe o `require` só enxerga módulos internos do Node; o módulo nativo do
+ * SQLite (better_sqlite3.node, ao lado do exe) é carregado com um require criado a
+ * partir do próprio executável e entregue pronto ao better-sqlite3.
+ */
+function nativeBinding(): object | undefined {
+  if (!PACKAGED) return undefined;
+  const load = createRequire(process.execPath);
+  return load(path.join(APP_DIR, 'better_sqlite3.node')) as object;
+}
+
+// Os tipos só declaram `string`, mas a biblioteca também aceita o módulo já carregado
+// (lib/database.js do better-sqlite3 11).
+export const db = new Database(path.join(DATA_DIR, 'ucop.sqlite'), {
+  nativeBinding: nativeBinding() as unknown as string | undefined,
+});
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 

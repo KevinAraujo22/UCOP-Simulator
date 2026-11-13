@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { Campaign, DieSize, Member, Role, RollRecord, RollRequest, Scene, SceneState, Sheet, Token } from '@ucop/shared';
+import { api } from '../api';
 import { useAuth } from '../auth';
 import { Board } from '../components/Board';
 import { CopyButton } from '../components/CopyButton';
@@ -45,6 +46,25 @@ export function TablePage() {
   const [openSheetId, setOpenSheetId] = useState<string | null>(null);
   const [tab, setTab] = useState<SideTab>('mesa');
   const [secret, setSecret] = useState(false);
+  /** Link público do túnel (só existe quando a mesa roda pelo UCOP.exe com cloudflared). */
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+
+  // O túnel leva alguns segundos para subir: o mestre consulta por até ~2 minutos.
+  useEffect(() => {
+    if (role !== 'gm') return;
+    let tries = 0;
+    let timer: number | undefined;
+    const poll = () => {
+      api<{ publicUrl: string | null }>('/api/server-info')
+        .then(({ publicUrl: url }) => {
+          setPublicUrl(url);
+          if (!url && ++tries < 24) timer = window.setTimeout(poll, 5000);
+        })
+        .catch(() => {});
+    };
+    poll();
+    return () => window.clearTimeout(timer);
+  }, [role]);
 
   const viewIdRef = useRef<string | null>(null);
   viewIdRef.current = view?.scene.id ?? null;
@@ -262,6 +282,11 @@ export function TablePage() {
         {isGm && campaign?.inviteCode && (
           <span className="invite">
             Convite: <code>{campaign.inviteCode}</code> <CopyButton text={campaign.inviteCode} />
+          </span>
+        )}
+        {isGm && publicUrl && (
+          <span className="invite" title="Link criado pelo Cloudflare Tunnel — mande para os jogadores junto com o convite">
+            Link: <code className="public-url">{publicUrl}</code> <CopyButton text={publicUrl} />
           </span>
         )}
         <span className="spacer" />

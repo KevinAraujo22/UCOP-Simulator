@@ -1197,3 +1197,14 @@ button.outline {
 .resource-max:hover {
   text-decoration: underline;
 }
+
+.public-url {
+  letter-spacing: 0;
+  font-size: 0.78rem;
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
