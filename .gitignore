@@ -16,6 +16,8 @@ apps/server/data/
 
 # Worktrees de outro repositório (não versionar)
 .claude/worktrees/
+.claude
+.gitignore
 
 # Sistema / editores
 .DS_Store
