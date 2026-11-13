@@ -24,9 +24,22 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Informe a senha'),
 });
 
+const gameSystem = z.enum(['op1', 'op2']);
+
 export const createCampaignSchema = z.object({
   name: z.string().trim().min(2, 'Nome muito curto').max(80),
+  system: gameSystem.default('op1'),
+  determination: z.boolean().default(false),
 });
+
+export const updateCampaignSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Nome muito curto').max(80),
+    system: gameSystem,
+    determination: z.boolean(),
+    playersMoveOwnOnly: z.boolean(),
+  })
+  .partial();
 
 export const joinCampaignSchema = z.object({
   inviteCode: z
@@ -66,6 +79,7 @@ const tokenFields = {
   imageUrl: uploadUrl.nullable(),
   ownerId: id.nullable(),
   hidden: z.boolean(),
+  sheetId: id.nullable(),
 };
 
 export const createTokenSchema = z.object({
@@ -78,11 +92,20 @@ export const createTokenSchema = z.object({
   imageUrl: tokenFields.imageUrl.default(null),
   ownerId: tokenFields.ownerId.default(null),
   hidden: tokenFields.hidden.default(false),
+  sheetId: tokenFields.sheetId.default(null),
 });
 
 export const updateTokenSchema = z.object({
   id,
   patch: z.object(tokenFields).partial(),
+});
+
+/** Cria (ou move) o token de uma ficha na cena, ao arrastar a ficha para o mapa. */
+export const placeTokenSchema = z.object({
+  sheetId: id,
+  sceneId: id,
+  x: z.number().int().min(0).max(LIMITS.sceneCells.max),
+  y: z.number().int().min(0).max(LIMITS.sceneCells.max),
 });
 
 export const moveTokenSchema = z.object({
@@ -93,13 +116,15 @@ export const moveTokenSchema = z.object({
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
-export type CreateCampaignInput = z.infer<typeof createCampaignSchema>;
+export type CreateCampaignInput = z.input<typeof createCampaignSchema>;
+export type UpdateCampaignInput = z.infer<typeof updateCampaignSchema>;
 export type JoinCampaignInput = z.infer<typeof joinCampaignSchema>;
 export type CreateSceneInput = z.input<typeof createSceneSchema>;
 export type UpdateSceneInput = z.infer<typeof updateSceneSchema>;
 export type CreateTokenInput = z.input<typeof createTokenSchema>;
 export type UpdateTokenInput = z.infer<typeof updateTokenSchema>;
 export type MoveTokenInput = z.infer<typeof moveTokenSchema>;
+export type PlaceTokenInput = z.infer<typeof placeTokenSchema>;
 
 /** Primeira mensagem de erro legível de um ZodError. */
 export function firstZodMessage(error: z.ZodError): string {

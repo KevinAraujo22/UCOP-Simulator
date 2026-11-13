@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { CampaignSummary } from '@ucop/shared';
+import { SYSTEM_LABELS, type CampaignSummary, type GameSystem } from '@ucop/shared';
 import { api, errorMessage } from '../api';
 import { useAuth } from '../auth';
 import { CopyButton } from '../components/CopyButton';
+import { LicenseSeal } from '../components/LicenseSeal';
 
 export function CampaignsPage() {
   const { user, logout } = useAuth();
@@ -11,6 +12,8 @@ export function CampaignsPage() {
   const [list, setList] = useState<CampaignSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
+  const [system, setSystem] = useState<GameSystem>('op1');
+  const [determination, setDetermination] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -35,7 +38,9 @@ export function CampaignsPage() {
   const onCreate = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
-      const created = await api<CampaignSummary>('/api/campaigns', { body: { name: newName } });
+      const created = await api<CampaignSummary>('/api/campaigns', {
+        body: { name: newName, system, determination: system === 'op1' && determination },
+      });
       setList((prev) => [created, ...(prev ?? [])]);
       setNewName('');
     });
@@ -77,7 +82,8 @@ export function CampaignsPage() {
                   <span className={`badge ${c.role}`}>{c.role === 'gm' ? 'Mestre' : 'Jogador'}</span>
                 </div>
                 <p className="muted small">
-                  {c.memberCount} {c.memberCount === 1 ? 'membro' : 'membros'}
+                  {SYSTEM_LABELS[c.system]}
+                  {c.determination && ' · Determinação'} · {c.memberCount} {c.memberCount === 1 ? 'membro' : 'membros'}
                 </p>
                 {c.inviteCode && (
                   <p className="invite">
@@ -103,6 +109,22 @@ export function CampaignsPage() {
               required
               minLength={2}
             />
+            <label>
+              Sistema das fichas
+              <select value={system} onChange={(e) => setSystem(e.target.value as GameSystem)}>
+                {(Object.keys(SYSTEM_LABELS) as GameSystem[]).map((s) => (
+                  <option key={s} value={s}>
+                    {SYSTEM_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {system === 'op1' && (
+              <label className="check">
+                <input type="checkbox" checked={determination} onChange={(e) => setDetermination(e.target.checked)} /> Regra de
+                Determinação (PD no lugar de PE e SAN)
+              </label>
+            )}
             <button className="primary" disabled={busy}>
               Criar
             </button>
@@ -123,6 +145,9 @@ export function CampaignsPage() {
             </button>
           </form>
         </div>
+        <footer className="page-footer">
+          <LicenseSeal />
+        </footer>
       </main>
     </div>
   );

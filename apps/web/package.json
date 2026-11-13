@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@3d-dice/dice-box-threejs": "^0.0.12",
     "@ucop/shared": "*",
     "konva": "^9.3.18",
     "react": "^18.3.1",

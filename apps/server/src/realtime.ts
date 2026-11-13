@@ -3,13 +3,16 @@ import type {
   ClientToServerEvents,
   InterServerEvents,
   Member,
+  Role,
+  RollRecord,
   Scene,
   SceneState,
   ServerToClientEvents,
+  Sheet,
   SocketData,
   Token,
 } from '@ucop/shared';
-import { campaigns, scenes, tokens } from './repo';
+import { campaigns, scenes, tokens, toCampaign } from './repo';
 
 export type IoServer = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 
@@ -23,7 +26,47 @@ export function setIo(server: IoServer): void {
 export const rooms = {
   gm: (campaignId: string) => `campaign:${campaignId}:gm`,
   players: (campaignId: string) => `campaign:${campaignId}:players`,
+  /** Todas as conexões de um usuário (para fichas privadas). */
+  user: (userId: string) => `user:${userId}`,
 };
+
+/** Quem pode ver uma ficha: o mestre sempre; o jogador só a própria (criaturas, nunca). */
+export function canSeeSheet(sheet: Sheet, userId: string, role: Role): boolean {
+  return role === 'gm' || (sheet.system !== 'creature' && sheet.ownerId === userId);
+}
+
+export function emitSheetUpserted(sheet: Sheet, previousOwnerId?: string | null): void {
+  if (!io) return;
+  let target = io.to(rooms.gm(sheet.campaignId));
+  if (sheet.ownerId && sheet.system !== 'creature') target = target.to(rooms.user(sheet.ownerId));
+  target.emit('sheet:upserted', sheet);
+  // Se a ficha trocou de dono, o dono anterior deixa de vê-la.
+  if (previousOwnerId && previousOwnerId !== sheet.ownerId) {
+    io.to(rooms.user(previousOwnerId)).except(rooms.gm(sheet.campaignId)).emit('sheet:removed', sheet.id);
+  }
+}
+
+export function emitSheetRemoved(sheet: Sheet): void {
+  if (!io) return;
+  let target = io.to(rooms.gm(sheet.campaignId));
+  if (sheet.ownerId) target = target.to(rooms.user(sheet.ownerId));
+  target.emit('sheet:removed', sheet.id);
+}
+
+export function emitRoll(roll: RollRecord): void {
+  if (!io) return;
+  let target = io.to(rooms.gm(roll.campaignId));
+  if (!roll.secret) target = target.to(rooms.players(roll.campaignId));
+  target.emit('roll:new', roll);
+}
+
+export function emitCampaignUpdated(campaignId: string): void {
+  if (!io) return;
+  const row = campaigns.findRow(campaignId);
+  if (!row) return;
+  io.to(rooms.gm(campaignId)).emit('campaign:updated', toCampaign(row, 'gm'));
+  io.to(rooms.players(campaignId)).emit('campaign:updated', toCampaign(row, 'player'));
+}
 
 export function isActiveScene(scene: Scene): boolean {
   return campaigns.findRow(scene.campaignId)?.active_scene_id === scene.id;

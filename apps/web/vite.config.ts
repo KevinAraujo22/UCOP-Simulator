@@ -6,6 +6,8 @@ const API = process.env.UCOP_API ?? 'http://127.0.0.1:3333';
 export default defineConfig({
   plugins: [react()],
   build: {
+    // Os dados 3D (three.js) ficam num pedaço próprio, carregado só na primeira rolagem.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks: {

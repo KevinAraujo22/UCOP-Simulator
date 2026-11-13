@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { createCampaignSchema, joinCampaignSchema } from '@ucop/shared';
+import { createCampaignSchema, joinCampaignSchema, updateCampaignSchema } from '@ucop/shared';
 import { currentUser, requireAuth, requireMember } from '../auth';
 import { HttpError, parse } from '../http';
-import { emitMemberJoined } from '../realtime';
+import { emitCampaignUpdated, emitMemberJoined } from '../realtime';
 import { campaigns, members, toCampaign } from '../repo';
 
 export const campaignsRouter = Router();
@@ -14,8 +14,8 @@ campaignsRouter.get('/campaigns', (req, res) => {
 
 campaignsRouter.post('/campaigns', (req, res) => {
   const user = currentUser(req);
-  const { name } = parse(createCampaignSchema, req.body);
-  const row = campaigns.create(name, user.id);
+  const input = parse(createCampaignSchema, req.body);
+  const row = campaigns.create(input, user.id);
   res.status(201).json({ ...toCampaign(row, 'gm'), role: 'gm', memberCount: 1 });
 });
 
@@ -39,6 +39,15 @@ campaignsRouter.get('/campaigns/:id', (req, res) => {
   const row = campaigns.findRow(req.params.id);
   if (!row) throw new HttpError(404, 'Campanha não encontrada');
   res.json({ ...toCampaign(row, member.role), role: member.role, memberCount: members.list(row.id).length });
+});
+
+/** Mestre: nome, sistema das fichas e regra de determinação. */
+campaignsRouter.patch('/campaigns/:id', (req, res) => {
+  requireMember(req.params.id, currentUser(req).id, { gm: true });
+  const patch = parse(updateCampaignSchema, req.body);
+  const row = campaigns.update(req.params.id, patch);
+  emitCampaignUpdated(row.id);
+  res.json({ ...toCampaign(row, 'gm'), role: 'gm', memberCount: members.list(row.id).length });
 });
 
 campaignsRouter.get('/campaigns/:id/members', (req, res) => {

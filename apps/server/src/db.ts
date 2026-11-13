@@ -62,4 +62,38 @@ db.exec(`
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_tokens_scene ON tokens(scene_id);
+
+  CREATE TABLE IF NOT EXISTS sheets (
+    id          TEXT PRIMARY KEY,
+    campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    owner_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+    system      TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_sheets_campaign ON sheets(campaign_id);
+
+  CREATE TABLE IF NOT EXISTS rolls (
+    id          TEXT PRIMARY KEY,
+    campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    user_id     TEXT NOT NULL,
+    user_name   TEXT NOT NULL,
+    label       TEXT NOT NULL,
+    secret      INTEGER NOT NULL DEFAULT 0,
+    detail      TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_rolls_campaign ON rolls(campaign_id, created_at);
 `);
+
+// Migrações simples para bancos criados antes da etapa 3.
+function addColumn(table: string, column: string, ddl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+}
+addColumn('campaigns', 'system', "system TEXT NOT NULL DEFAULT 'op1'");
+addColumn('campaigns', 'determination', 'determination INTEGER NOT NULL DEFAULT 0');
+addColumn('campaigns', 'players_move_own_only', 'players_move_own_only INTEGER NOT NULL DEFAULT 1');
+addColumn('tokens', 'sheet_id', 'sheet_id TEXT REFERENCES sheets(id) ON DELETE SET NULL');

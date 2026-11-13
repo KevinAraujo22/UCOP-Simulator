@@ -1,3 +1,5 @@
+import type { GameSystem } from './systems';
+
 /** Papel de um usuário dentro de uma campanha. */
 export type Role = 'gm' | 'player';
 
@@ -16,6 +18,12 @@ export interface Campaign {
   activeSceneId: string | null;
   /** Código de convite — enviado apenas para o mestre. */
   inviteCode?: string;
+  /** Sistema das fichas da campanha. */
+  system: GameSystem;
+  /** Ordem 1: regra opcional de pontos de determinação (PD no lugar de PE e SAN). */
+  determination: boolean;
+  /** Jogadores só movem os próprios tokens (desligado: movem qualquer token visível). */
+  playersMoveOwnOnly: boolean;
   createdAt: string;
 }
 
@@ -64,6 +72,8 @@ export interface Token {
   ownerId: string | null;
   /** Tokens ocultos nunca são enviados aos jogadores. */
   hidden: boolean;
+  /** Ficha vinculada (abre com duplo clique). */
+  sheetId: string | null;
 }
 
 export interface SceneState {

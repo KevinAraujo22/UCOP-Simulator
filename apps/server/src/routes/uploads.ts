@@ -34,14 +34,14 @@ const upload = multer({
   },
 });
 
-/** POST /api/campaigns/:id/uploads — mestre envia uma imagem (campo "file"). */
+/** POST /api/campaigns/:id/uploads — membro envia uma imagem (campo "file"): mapas, tokens, retratos. */
 export const uploadsApiRouter = Router();
 uploadsApiRouter.post(
   '/campaigns/:id/uploads',
   requireAuth,
   (req, _res, next) => {
     if (!ID_RE.test(req.params.id)) return next(new HttpError(400, 'Campanha inválida'));
-    requireMember(req.params.id, currentUser(req).id, { gm: true });
+    requireMember(req.params.id, currentUser(req).id);
     next();
   },
   upload.single('file'),

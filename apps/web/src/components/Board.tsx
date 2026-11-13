@@ -13,7 +13,16 @@ interface BoardProps {
   onSelect(tokenId: string | null): void;
   /** Chamado ao soltar um token já encaixado na grade (em células). */
   onMove(token: Token, x: number, y: number): void;
+  /** Duplo clique num token com ficha vinculada. */
+  onOpenSheet?(sheetId: string): void;
+  /** Jogadores só movem os próprios tokens (toggle do mestre). */
+  playersMoveOwnOnly?: boolean;
+  /** Ficha arrastada da lista e solta no mapa (célula de destino). */
+  onDropSheet?(sheetId: string, x: number, y: number): void;
 }
+
+/** Tipo usado no drag-and-drop de fichas da barra lateral para o mapa. */
+export const SHEET_DRAG_TYPE = 'application/x-ucop-sheet';
 
 interface View {
   x: number;
@@ -32,12 +41,26 @@ function fitView(scene: Scene, width: number, height: number): View {
   return { scale, x: (width - mapW * scale) / 2, y: (height - mapH * scale) / 2 };
 }
 
-export function canMoveToken(token: Token, userId: string, isGm: boolean): boolean {
-  return isGm || (token.ownerId === userId && !token.hidden);
+export function canMoveToken(token: Token, userId: string, isGm: boolean, ownOnly = true): boolean {
+  if (isGm) return true;
+  if (token.hidden) return false;
+  return token.ownerId === userId || !ownOnly;
 }
 
-export function Board({ scene, tokens, userId, isGm, selectedId, onSelect, onMove }: BoardProps) {
+export function Board({
+  scene,
+  tokens,
+  userId,
+  isGm,
+  selectedId,
+  onSelect,
+  onMove,
+  onOpenSheet,
+  playersMoveOwnOnly = true,
+  onDropSheet,
+}: BoardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [dropping, setDropping] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 });
   const background = useImage(scene.backgroundUrl);
@@ -81,7 +104,29 @@ export function Board({ scene, tokens, userId, isGm, selectedId, onSelect, onMov
   const mapH = scene.height * gs;
 
   return (
-    <div className="board" ref={containerRef}>
+    <div
+      className={`board ${dropping ? 'drop-target' : ''}`}
+      ref={containerRef}
+      onDragOver={(e) => {
+        if (!onDropSheet || !e.dataTransfer.types.includes(SHEET_DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setDropping(true);
+      }}
+      onDragLeave={() => setDropping(false)}
+      onDrop={(e) => {
+        setDropping(false);
+        const sheetId = e.dataTransfer.getData(SHEET_DRAG_TYPE);
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!sheetId || !onDropSheet || !rect) return;
+        e.preventDefault();
+        // Converte o ponto da tela para coordenadas do mapa e centraliza o token no cursor.
+        const px = (e.clientX - rect.left - view.x) / view.scale - gs / 2;
+        const py = (e.clientY - rect.top - view.y) / view.scale - gs / 2;
+        const cell = snapToGrid(px, py, gs, 1, scene);
+        onDropSheet(sheetId, cell.x, cell.y);
+      }}
+    >
       {size.width > 0 && (
         <Stage
           width={size.width}
@@ -127,10 +172,11 @@ export function Board({ scene, tokens, userId, isGm, selectedId, onSelect, onMov
                 key={token.id}
                 token={token}
                 gridSize={gs}
-                draggable={canMoveToken(token, userId, isGm)}
+                draggable={canMoveToken(token, userId, isGm, playersMoveOwnOnly)}
                 own={!isGm && token.ownerId === userId}
                 selected={token.id === selectedId}
                 onSelect={() => onSelect(token.id)}
+                onOpen={token.sheetId && onOpenSheet ? () => onOpenSheet(token.sheetId!) : undefined}
                 onDrop={(px, py) => {
                   const pos = snapToGrid(px, py, gs, token.size, scene);
                   onMove(token, pos.x, pos.y);
@@ -164,6 +210,7 @@ interface TokenNodeProps {
   own: boolean;
   selected: boolean;
   onSelect(): void;
+  onOpen?: () => void;
   /** Recebe a posição solta em pixels e devolve a célula encaixada. */
   onDrop(px: number, py: number): { x: number; y: number };
 }
@@ -173,7 +220,7 @@ function initials(name: string): string {
   return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : name.slice(0, 2)).toUpperCase();
 }
 
-function TokenNode({ token, gridSize, draggable, own, selected, onSelect, onDrop }: TokenNodeProps) {
+function TokenNode({ token, gridSize, draggable, own, selected, onSelect, onOpen, onDrop }: TokenNodeProps) {
   const image = useImage(token.imageUrl);
   const px = token.size * gridSize;
   const r = px / 2 - Math.max(2, gridSize * 0.05);
@@ -195,6 +242,8 @@ function TokenNode({ token, gridSize, draggable, own, selected, onSelect, onDrop
         onSelect();
       }}
       onTap={onSelect}
+      onDblClick={onOpen}
+      onDblTap={onOpen}
       onMouseEnter={(e) => setCursor(e, draggable ? 'grab' : 'pointer')}
       onMouseLeave={(e) => setCursor(e, '')}
       onDragStart={(e) => {

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { errorMessage } from '../api';
 import { useAuth } from '../auth';
+import { LicenseSeal } from '../components/LicenseSeal';
 
 export function AuthPage() {
   const { user, login, register } = useAuth();
@@ -39,7 +40,7 @@ export function AuthPage() {
         <h1 className="brand">
           UCOP<span>.simulator</span>
         </h1>
-        <p className="muted">Mesa virtual para suas sessões de Ordem Paranormal.</p>
+        <p className="muted">Mesa virtual de RPG para jogar com os amigos.</p>
 
         <div className="tabs" role="tablist">
           <button
@@ -88,6 +89,7 @@ export function AuthPage() {
           </button>
         </form>
       </div>
+      <LicenseSeal large />
     </div>
   );
 }

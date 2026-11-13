@@ -1,26 +1,40 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { clamp, LIMITS, type Member, type Scene, type SceneState, type Token } from '@ucop/shared';
+import {
+  clamp,
+  LIMITS,
+  SYSTEM_LABELS,
+  type Campaign,
+  type GameSystem,
+  type Member,
+  type Scene,
+  type SceneState,
+  type Sheet,
+  type Token,
+} from '@ucop/shared';
 import { api, errorMessage, uploadImage } from '../api';
 import { unwrap, type GameSocket } from '../socket';
 
 interface GmPanelProps {
   socket: GameSocket;
-  campaignId: string;
+  campaign: Campaign;
   scenes: Scene[];
   activeSceneId: string | null;
   view: SceneState | null;
   members: Member[];
+  sheets: Sheet[];
   selectedId: string | null;
   onSelect(id: string | null): void;
   onViewScene(sceneId: string | null): void;
   onSceneSaved(scene: Scene): void;
+  onCampaignSaved(campaign: Campaign): void;
   flash(message: string): void;
 }
 
 const TOKEN_COLORS = ['#8b5cf6', '#ef4444', '#22c55e', '#3b82f6', '#f59e0b', '#ec4899', '#14b8a6', '#64748b'];
 
 export function GmPanel(props: GmPanelProps) {
-  const { socket, campaignId, scenes, activeSceneId, view, members, selectedId, onSelect, onViewScene, flash } = props;
+  const { socket, campaign, scenes, activeSceneId, view, members, sheets, selectedId, onSelect, onViewScene, flash } = props;
+  const campaignId = campaign.id;
 
   const run = async (action: () => Promise<unknown>) => {
     try {
@@ -53,12 +67,76 @@ export function GmPanel(props: GmPanelProps) {
             campaignId={campaignId}
             view={view}
             members={members}
+            sheets={sheets}
             selectedId={selectedId}
             onSelect={onSelect}
             run={run}
           />
         </>
       )}
+
+      <section>
+        <h3>Campanha</h3>
+        <div className="stack compact">
+          <label>
+            Sistema das fichas
+            <select
+              value={campaign.system}
+              onChange={(e) =>
+                void run(async () =>
+                  props.onCampaignSaved(
+                    await api<Campaign>(`/api/campaigns/${campaignId}`, { method: 'PATCH', body: { system: e.target.value as GameSystem } }),
+                  ),
+                )
+              }
+            >
+              {(Object.keys(SYSTEM_LABELS) as GameSystem[]).map((s) => (
+                <option key={s} value={s}>
+                  {SYSTEM_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {campaign.system === 'op1' && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={campaign.determination}
+                onChange={(e) =>
+                  void run(async () =>
+                    props.onCampaignSaved(
+                      await api<Campaign>(`/api/campaigns/${campaignId}`, { method: 'PATCH', body: { determination: e.target.checked } }),
+                    ),
+                  )
+                }
+              />{' '}
+              Regra de Determinação (PD no lugar de PE e SAN)
+            </label>
+          )}
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={campaign.playersMoveOwnOnly}
+              onChange={(e) =>
+                void run(async () =>
+                  props.onCampaignSaved(
+                    await api<Campaign>(`/api/campaigns/${campaignId}`, {
+                      method: 'PATCH',
+                      body: { playersMoveOwnOnly: e.target.checked },
+                    }),
+                  ),
+                )
+              }
+            />{' '}
+            Jogadores só movem os próprios personagens
+          </label>
+          <p className="muted tiny">
+            Desligado, os jogadores podem mover qualquer token visível (inclusive monstros). Tokens ocultos continuam só com o
+            mestre.
+          </p>
+          <p className="muted tiny">Fichas já criadas mantêm o sistema em que foram criadas.</p>
+        </div>
+      </section>
 
       <section>
         <h3>Membros</h3>
@@ -81,7 +159,7 @@ type Run = (action: () => Promise<unknown>) => Promise<void>;
 // Cenas: listar, criar, abrir e ativar
 // ---------------------------------------------------------------------------
 function ScenesSection({
-  campaignId,
+  campaign,
   scenes,
   activeSceneId,
   view,
@@ -89,6 +167,7 @@ function ScenesSection({
   activate,
   run,
 }: GmPanelProps & { activate(id: string | null): Promise<void>; run: Run }) {
+  const campaignId = campaign.id;
   const [name, setName] = useState('');
   const [width, setWidth] = useState(20);
   const [height, setHeight] = useState(15);
@@ -270,6 +349,7 @@ function TokensSection({
   campaignId,
   view,
   members,
+  sheets,
   selectedId,
   onSelect,
   run,
@@ -278,6 +358,7 @@ function TokensSection({
   campaignId: string;
   view: SceneState;
   members: Member[];
+  sheets: Sheet[];
   selectedId: string | null;
   onSelect(id: string | null): void;
   run: Run;
@@ -353,6 +434,7 @@ function TokensSection({
           socket={socket}
           campaignId={campaignId}
           players={players}
+          sheets={sheets}
           onClose={() => onSelect(null)}
           run={run}
         />
@@ -366,6 +448,7 @@ function TokenEditor({
   socket,
   campaignId,
   players,
+  sheets,
   onClose,
   run,
 }: {
@@ -373,6 +456,7 @@ function TokenEditor({
   socket: GameSocket;
   campaignId: string;
   players: Member[];
+  sheets: Sheet[];
   onClose(): void;
   run: Run;
 }) {
@@ -429,6 +513,21 @@ function TokenEditor({
       </div>
       <label className="check">
         <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> Oculto para jogadores
+      </label>
+      <label>
+        Ficha vinculada (duplo clique no token abre)
+        <select
+          value={token.sheetId ?? ''}
+          onChange={(e) => void update({ sheetId: e.target.value || null })}
+          aria-label="Ficha vinculada"
+        >
+          <option value="">— nenhuma —</option>
+          {sheets.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.system === 'creature' ? `☠ ${s.name}` : s.name}
+            </option>
+          ))}
+        </select>
       </label>
       <div className="row">
         <label className="file-input small grow">

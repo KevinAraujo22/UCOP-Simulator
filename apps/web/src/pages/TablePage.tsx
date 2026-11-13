@@ -1,20 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import type { Campaign, Member, Role, Scene, SceneState, Token } from '@ucop/shared';
+import type { Campaign, DieSize, Member, Role, RollRecord, RollRequest, Scene, SceneState, Sheet, Token } from '@ucop/shared';
 import { useAuth } from '../auth';
 import { Board } from '../components/Board';
 import { CopyButton } from '../components/CopyButton';
 import { GmPanel } from '../components/GmPanel';
 import { PlayerPanel } from '../components/PlayerPanel';
+import { DiceOverlay, RollLog } from '../components/Rolls';
+import { SheetsPanel, SheetWindow } from '../components/sheet/SheetWindow';
+import { GameContext, type GameContextValue } from '../game';
 import { createSocket, type GameSocket } from '../socket';
 
 type Status = 'connecting' | 'online' | 'offline';
+type SideTab = 'mesa' | 'fichas' | 'criaturas' | 'dados';
 
-function upsert(list: Token[], token: Token): Token[] {
-  const i = list.findIndex((t) => t.id === token.id);
-  if (i === -1) return [...list, token];
+function upsert<T extends { id: string }>(list: T[], item: T): T[] {
+  const i = list.findIndex((t) => t.id === item.id);
+  if (i === -1) return [...list, item];
   const copy = list.slice();
-  copy[i] = token;
+  copy[i] = item;
   return copy;
 }
 
@@ -36,6 +40,11 @@ export function TablePage() {
   /** Cena exibida no tabuleiro (jogadores: sempre a ativa). */
   const [view, setView] = useState<SceneState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sheets, setSheets] = useState<Sheet[]>([]);
+  const [rolls, setRolls] = useState<RollRecord[]>([]);
+  const [openSheetId, setOpenSheetId] = useState<string | null>(null);
+  const [tab, setTab] = useState<SideTab>('mesa');
+  const [secret, setSecret] = useState(false);
 
   const viewIdRef = useRef<string | null>(null);
   viewIdRef.current = view?.scene.id ?? null;
@@ -63,6 +72,8 @@ export function TablePage() {
         setRole(data.role);
         setMembers(data.members);
         setScenes(data.scenes);
+        setSheets(data.sheets);
+        setRolls(data.rolls);
         setActiveSceneId(data.campaign.activeSceneId);
         if (data.role === 'player') {
           setView(data.activeScene);
@@ -87,9 +98,8 @@ export function TablePage() {
       if (err.message === 'Não autenticado') setFatal('Sessão expirada. Entre novamente.');
     });
 
-    s.on('scene:list', (list) => {
-      setScenes(list);
-    });
+    s.on('campaign:updated', (c) => setCampaign((prev) => (prev ? { ...c, inviteCode: c.inviteCode ?? prev.inviteCode } : c)));
+    s.on('scene:list', (list) => setScenes(list));
     s.on('scene:active', (id) => setActiveSceneId(id));
     s.on('scene:state', (state) => {
       setView(state);
@@ -113,6 +123,12 @@ export function TablePage() {
     s.on('member:joined', (member) => {
       setMembers((list) => (list.some((m) => m.userId === member.userId) ? list : [...list, member]));
     });
+    s.on('sheet:upserted', (sheet) => setSheets((list) => upsert(list, sheet)));
+    s.on('sheet:removed', (sheetId) => {
+      setSheets((list) => list.filter((x) => x.id !== sheetId));
+      setOpenSheetId((id) => (id === sheetId ? null : id));
+    });
+    s.on('roll:new', (roll) => setRolls((list) => (list.some((r) => r.id === roll.id) ? list : [...list, roll].slice(-100))));
 
     return () => {
       s.removeAllListeners();
@@ -155,6 +171,63 @@ export function TablePage() {
     [socket, flash],
   );
 
+  const sendRoll = useCallback(
+    async (req: RollRequest): Promise<RollRecord | null> => {
+      if (!socket) return null;
+      const res = await socket.emitWithAck('roll', req);
+      if (!res.ok) {
+        flash(res.error);
+        return null;
+      }
+      // Garante o resultado na tela mesmo antes do broadcast chegar.
+      setRolls((list) => (list.some((r) => r.id === res.data.id) ? list : [...list, res.data].slice(-100)));
+      return res.data;
+    },
+    [socket, flash],
+  );
+
+  const ctx = useMemo<GameContextValue | null>(() => {
+    if (!socket || !campaign || !role) return null;
+    const isGm = role === 'gm';
+    return {
+      socket,
+      campaign,
+      role,
+      userId,
+      members,
+      sheets,
+      flash,
+      openSheet: setOpenSheetId,
+      rollExpr: (expression: string, label: string) => sendRoll({ type: 'expr', expression, label, secret: isGm && secret }),
+      rollOp2: (dice: DieSize[], fear: DieSize | null, label: string) =>
+        sendRoll({ type: 'op2', dice, fear, label, secret: isGm && secret }),
+    };
+  }, [socket, campaign, role, userId, members, sheets, flash, sendRoll, secret]);
+
+  /** Mestre: cria um token ligado à ficha no centro da cena aberta. */
+  const placeToken = useCallback(
+    (sheet: Sheet) => {
+      if (!socket || !view) return flash('Abra uma cena para pôr o token no mapa');
+      const portrait = (sheet.data as { portrait?: string | null }).portrait ?? null;
+      socket.emit(
+        'token:create',
+        {
+          sceneId: view.scene.id,
+          name: sheet.name,
+          sheetId: sheet.id,
+          imageUrl: portrait,
+          ownerId: sheet.system === 'creature' ? null : sheet.ownerId,
+          hidden: sheet.system === 'creature',
+          color: sheet.system === 'creature' ? '#b91c1c' : '#7c3aed',
+          x: Math.floor(view.scene.width / 2),
+          y: Math.floor(view.scene.height / 2),
+        },
+        (res) => (res.ok ? flash(sheet.system === 'creature' ? 'Token criado (oculto) no centro da cena' : 'Token criado no centro da cena') : flash(res.error)),
+      );
+    },
+    [socket, view, flash],
+  );
+
   if (fatal) {
     return (
       <div className="center-screen">
@@ -170,8 +243,15 @@ export function TablePage() {
 
   const isGm = role === 'gm';
   const activeScene = scenes.find((s) => s.id === activeSceneId);
+  const openSheet = sheets.find((s) => s.id === openSheetId) ?? null;
+  const tabs: { id: SideTab; label: string; icon: string }[] = [
+    { id: 'mesa', label: 'Mesa', icon: '◫' },
+    { id: 'fichas', label: 'Fichas', icon: '☰' },
+    ...(isGm ? [{ id: 'criaturas' as const, label: 'Criaturas', icon: '☠' }] : []),
+    { id: 'dados', label: 'Dados', icon: '⬢' },
+  ];
 
-  return (
+  const body = (
     <div className="table-layout">
       <header className="topbar">
         <Link to="/campanhas" className="button">
@@ -208,6 +288,14 @@ export function TablePage() {
               selectedId={selectedId}
               onSelect={setSelectedId}
               onMove={moveToken}
+              onOpenSheet={(id) => (sheets.some((s) => s.id === id) ? setOpenSheetId(id) : undefined)}
+              playersMoveOwnOnly={campaign?.playersMoveOwnOnly ?? true}
+              onDropSheet={(sheetId, x, y) =>
+                socket?.emit('token:place', { sheetId, sceneId: view.scene.id, x, y }, (res) => {
+                  if (!res.ok) flash(res.error);
+                  else if (res.data.hidden) flash('Token criado oculto — revele no painel Mesa quando quiser');
+                })
+              }
             />
           ) : (
             <div className="center-screen muted">
@@ -218,32 +306,61 @@ export function TablePage() {
                   : 'Aguardando o mestre ativar uma cena…'}
             </div>
           )}
+          {openSheet && (
+            <SheetWindow
+              key={openSheet.id}
+              sheet={openSheet}
+              onClose={() => setOpenSheetId(null)}
+              onPlaceToken={isGm ? placeToken : undefined}
+            />
+          )}
           {notice && <div className="toast">{notice}</div>}
         </section>
 
         <aside className="sidebar">
-          {isGm && socket && campaign ? (
-            <GmPanel
-              socket={socket}
-              campaignId={campaign.id}
-              scenes={scenes}
-              activeSceneId={activeSceneId}
-              view={view}
-              members={members}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              onViewScene={viewScene}
-              onSceneSaved={(scene) => {
-                setScenes((list) => (list.some((s) => s.id === scene.id) ? list.map((s) => (s.id === scene.id ? scene : s)) : [...list, scene]));
-                setView((v) => (v && v.scene.id === scene.id ? { ...v, scene } : v));
-              }}
-              flash={flash}
-            />
-          ) : role === 'player' ? (
-            <PlayerPanel members={members} userId={userId} view={view} activeScene={activeScene ?? view?.scene ?? null} />
-          ) : null}
+          <nav className="side-tabs">
+            {tabs.map((t) => (
+              <button key={t.id} type="button" className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)} title={t.label}>
+                <span aria-hidden>{t.icon}</span>
+                {t.label}
+              </button>
+            ))}
+          </nav>
+          <div className="side-content">
+            {tab === 'mesa' &&
+              (isGm && socket && campaign ? (
+                <GmPanel
+                  socket={socket}
+                  campaign={campaign}
+                  scenes={scenes}
+                  activeSceneId={activeSceneId}
+                  view={view}
+                  members={members}
+                  sheets={sheets}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onViewScene={viewScene}
+                  onSceneSaved={(scene) => {
+                    setScenes((list) => upsert(list, scene));
+                    setView((v) => (v && v.scene.id === scene.id ? { ...v, scene } : v));
+                  }}
+                  onCampaignSaved={setCampaign}
+                  flash={flash}
+                />
+              ) : role === 'player' ? (
+                <PlayerPanel members={members} userId={userId} view={view} activeScene={activeScene ?? view?.scene ?? null} />
+              ) : null)}
+            {tab === 'fichas' && ctx && <SheetsPanel />}
+            {tab === 'criaturas' && ctx && <SheetsPanel creatures />}
+            {tab === 'dados' && ctx && (
+              <RollLog rolls={rolls} isGm={isGm} secret={secret} onSecret={setSecret} onRoll={(e) => void ctx.rollExpr(e, 'Rolagem livre')} />
+            )}
+          </div>
         </aside>
       </div>
+      <DiceOverlay rolls={rolls} />
     </div>
   );
+
+  return ctx ? <GameContext.Provider value={ctx}>{body}</GameContext.Provider> : body;
 }
