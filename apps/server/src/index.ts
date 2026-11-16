@@ -3,7 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import express from 'express';
 import { Server } from 'socket.io';
-import { PACKAGED, PORT, WEB_DIST } from './config';
+import { CORS_ORIGINS, PACKAGED, PORT, WEB_DIST } from './config';
 import './db';
 import { currentUser, requireAuth } from './auth';
 import { fatal, getPublicUrl, startDesktopExtras, stopDesktopExtras } from './launcher';
@@ -19,6 +19,24 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 'loopback'); // Cloudflare Tunnel / proxy reverso local
 app.use(express.json({ limit: '1mb' }));
+
+// CORS só para as origens do app de celular (ver CORS_ORIGINS). Sem credenciais:
+// o app autentica pelo cabeçalho Authorization.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && CORS_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Max-Age', '600');
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+  }
+  next();
+});
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
@@ -52,7 +70,7 @@ if (hasWebBuild) {
 app.use(errorHandler);
 
 const server = http.createServer(app);
-const io: IoServer = new Server(server, { serveClient: false });
+const io: IoServer = new Server(server, { serveClient: false, cors: { origin: CORS_ORIGINS } });
 setIo(io);
 registerSocketHandlers(io);
 

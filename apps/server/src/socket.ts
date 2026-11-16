@@ -7,7 +7,11 @@ import {
   firstZodMessage,
   moveTokenSchema,
   placeTokenSchema,
+  castRitualSchema,
+  findRitual,
   newSheetData,
+  op1Derive,
+  RITUAL_BASE_COST,
   rollExpression,
   rollOp2,
   rollRequestSchema,
@@ -21,6 +25,7 @@ import {
   type RollRecord,
   type Scene,
   type ServerToClientEvents,
+  type Op1SheetData,
   type Sheet,
   type SocketData,
   type Token,
@@ -225,6 +230,68 @@ export function registerSocketHandlers(io: IoServer): void {
         sheets.delete(sheet.id);
         emitSheetRemoved(sheet);
         return null;
+      }),
+    );
+
+    // ------------------------------------------------------------ rituais
+    // Conjurar: o servidor confere a ficha, desconta PE (ou PD, na regra de
+    // Determinação) e transmite o resultado — inclusive a rolagem do efeito.
+    socket.on('ritual:cast', (input, ack) =>
+      handle(ack, () => {
+        const { campaignId, role, userId } = context(socket);
+        const req = parse(castRitualSchema, input);
+        const sheet = sheetInCampaign(req.sheetId, campaignId);
+        if (!canSeeSheet(sheet, userId, role)) throw new HttpError(404, 'Ficha não encontrada');
+        if (sheet.system !== 'op1') throw new HttpError(400, 'A conjuração de rituais é das fichas de Ordem 1');
+        const data = sheet.data as Op1SheetData;
+        const ritual = data.rituals.find((r) => r.id === req.ritualId);
+        if (!ritual) throw new HttpError(404, 'Ritual não encontrado na ficha');
+        const cat = findRitual(ritual.ref);
+        const extra = req.form === 'discente' ? cat?.discente : req.form === 'verdadeiro' ? cat?.verdadeiro : 0;
+        if (req.form !== 'normal' && !extra) throw new HttpError(400, 'Este ritual não tem essa forma');
+        const cost = Math.max(0, RITUAL_BASE_COST[ritual.circle] + (extra ?? 0) + req.adjust);
+        const campaign = campaigns.findRow(campaignId)!;
+        const key = campaign.determination ? 'pd' : 'pe';
+        const current = data[key].current;
+        if (current < cost) {
+          throw new HttpError(400, `${key.toUpperCase()} insuficientes: ${current} disponíveis, custo ${cost}`);
+        }
+        let effect: ReturnType<typeof rollExpression> | null = null;
+        if (req.roll?.trim()) {
+          try {
+            effect = rollExpression(req.roll, secureDie);
+          } catch (err) {
+            throw new HttpError(400, err instanceof Error ? err.message : 'Rolagem inválida');
+          }
+        }
+        const newData: Op1SheetData = { ...data, [key]: { current: current - cost } };
+        const updated = sheets.update({ ...sheet, data: newData });
+        emitSheetUpserted(updated);
+        const record: RollRecord = {
+          id: randomUUID(),
+          campaignId,
+          userId,
+          userName: socket.data.user.name,
+          label: `${sheet.name} · ${ritual.name}`,
+          secret: role === 'gm' && !!req.secret,
+          createdAt: new Date().toISOString(),
+          detail: {
+            type: 'cast',
+            ritual: ritual.name,
+            element: ritual.element,
+            circle: ritual.circle,
+            form: req.form,
+            cost,
+            resource: key === 'pd' ? 'PD' : 'PE',
+            remaining: current - cost,
+            dt: op1Derive(newData).ritualDt,
+            roll: effect,
+            total: effect?.total ?? 0,
+          },
+        };
+        rolls.add(record);
+        emitRoll(record);
+        return record;
       }),
     );
 

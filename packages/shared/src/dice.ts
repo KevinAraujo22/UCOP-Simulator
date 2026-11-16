@@ -182,6 +182,36 @@ export const rollRequestSchema = z.discriminatedUnion('type', [
 
 export type RollRequest = z.input<typeof rollRequestSchema>;
 
+/** Conjuração de ritual (Ordem 1): o servidor desconta PE/PD e rola o efeito, se houver. */
+export interface CastRollDetail {
+  type: 'cast';
+  ritual: string;
+  element: string;
+  circle: number;
+  form: 'normal' | 'discente' | 'verdadeiro';
+  cost: number;
+  resource: 'PE' | 'PD';
+  remaining: number;
+  dt: number;
+  /** Rolagem do efeito (dano, cura…), quando o ritual tem uma. */
+  roll: ExprRollDetail | null;
+  /** Total da rolagem (ou 0), para manter o formato dos outros detalhes. */
+  total: number;
+}
+
+export const castRitualSchema = z.object({
+  sheetId: z.string().min(1).max(64),
+  /** Id do ritual dentro da ficha. */
+  ritualId: z.string().min(1).max(64),
+  form: z.enum(['normal', 'discente', 'verdadeiro']).default('normal'),
+  /** Ajuste manual no custo (poderes que reduzem/aumentam o custo). */
+  adjust: z.number().int().min(-20).max(20).default(0),
+  /** Rolagem do efeito; vazio = só gasta o custo. */
+  roll: z.string().max(100).optional(),
+  secret: z.boolean().optional(),
+});
+export type CastRitualInput = z.input<typeof castRitualSchema>;
+
 export interface RollRecord {
   id: string;
   campaignId: string;
@@ -190,5 +220,5 @@ export interface RollRecord {
   label: string;
   secret: boolean;
   createdAt: string;
-  detail: ExprRollDetail | Op2RollDetail;
+  detail: ExprRollDetail | Op2RollDetail | CastRollDetail;
 }

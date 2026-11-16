@@ -4,6 +4,8 @@ dist/
 build/
 release/
 tools/
+# Projeto Android gerado pelo Capacitor (recriado por npm run build:apk)
+apps/mobile/android/
 *.tsbuildinfo
 
 # Dados locais do servidor (SQLite + uploads)
@@ -17,7 +19,7 @@ apps/server/data/
 # Worktrees de outro repositório (não versionar)
 .claude/worktrees/
 .claude
-.gitignore
+.gitgnore
 
 # Sistema / editores
 .DS_Store

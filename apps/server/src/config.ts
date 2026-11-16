@@ -62,6 +62,22 @@ if (!process.env.JWT_SECRET && !PACKAGED) {
   );
 }
 
+/**
+ * Origens que podem chamar a API de outro endereço: o app de celular (Capacitor serve o
+ * app em http://localhost / https://localhost dentro do APK). A autenticação dessas
+ * chamadas é só por token no cabeçalho (sem cookies). UCOP_CORS_ORIGINS acrescenta outras,
+ * separadas por vírgula.
+ */
+export const CORS_ORIGINS = [
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  ...(process.env.UCOP_CORS_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+];
+
 export const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 dias
 export const AUTH_COOKIE = 'ucop_token';
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB

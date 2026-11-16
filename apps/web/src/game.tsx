@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { Campaign, DieSize, Member, Role, RollRecord, Sheet } from '@ucop/shared';
+import type { Campaign, CastRitualInput, DieSize, Member, Role, RollRecord, Sheet } from '@ucop/shared';
 import type { GameSocket } from './socket';
 
 /** Estado e ações da mesa compartilhados pelos painéis e fichas. */
@@ -16,6 +16,8 @@ export interface GameContextValue {
   rollExpr(expression: string, label: string): Promise<RollRecord | null>;
   /** Rola um teste de Ordem 2 (dados somados + dado de pavor). */
   rollOp2(dice: DieSize[], fear: DieSize | null, label: string): Promise<RollRecord | null>;
+  /** Conjura um ritual da ficha (o servidor desconta PE/PD e transmite à mesa). */
+  castRitual(input: Omit<CastRitualInput, 'secret'>): Promise<RollRecord | null>;
 }
 
 export const GameContext = createContext<GameContextValue | null>(null);

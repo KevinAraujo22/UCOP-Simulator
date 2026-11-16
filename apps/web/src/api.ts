@@ -1,5 +1,24 @@
 const TOKEN_KEY = 'ucop.token';
 
+/**
+ * Endereço do servidor. No site é vazio (mesma origem); no app de celular é o endereço
+ * que o jogador informou (ex.: https://xxxx.trycloudflare.com ou http://192.168.0.10:3333).
+ */
+let API_BASE = '';
+
+export function setApiBase(url: string): void {
+  API_BASE = url.replace(/\/+$/, '');
+}
+
+export function getApiBase(): string {
+  return API_BASE;
+}
+
+/** Monta a URL completa de um caminho do servidor (/api/..., /uploads/...). */
+export function apiUrl(path: string): string {
+  return API_BASE + path;
+}
+
 export function getStoredToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY);
@@ -43,7 +62,7 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(opts.body);
   }
-  const res = await fetch(path, { method: opts.method ?? (body ? 'POST' : 'GET'), headers, body });
+  const res = await fetch(apiUrl(path), { method: opts.method ?? (body ? 'POST' : 'GET'), headers, body });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? `Erro ${res.status}`);

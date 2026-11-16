@@ -221,6 +221,15 @@ export function TablePage() {
       rollExpr: (expression: string, label: string) => sendRoll({ type: 'expr', expression, label, secret: isGm && secret }),
       rollOp2: (dice: DieSize[], fear: DieSize | null, label: string) =>
         sendRoll({ type: 'op2', dice, fear, label, secret: isGm && secret }),
+      castRitual: async (input) => {
+        const res = await socket.emitWithAck('ritual:cast', { ...input, secret: isGm && secret });
+        if (!res.ok) {
+          flash(res.error);
+          return null;
+        }
+        setRolls((list) => (list.some((r) => r.id === res.data.id) ? list : [...list, res.data].slice(-100)));
+        return res.data;
+      },
     };
   }, [socket, campaign, role, userId, members, sheets, flash, sendRoll, secret]);
 

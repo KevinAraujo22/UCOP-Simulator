@@ -1,4 +1,4 @@
-import type { RollRecord, RollRequest } from './dice';
+import type { CastRitualInput, RollRecord, RollRequest } from './dice';
 import type { CreateTokenInput, MoveTokenInput, PlaceTokenInput, UpdateTokenInput } from './schemas';
 import type { CreateSheetInput, Sheet, UpdateSheetInput } from './sheets';
 import type { Campaign, Member, Role, Scene, SceneState, Token, User } from './types';
@@ -39,6 +39,8 @@ export interface ClientToServerEvents {
   'sheet:delete': (sheetId: string, ack: Ack<null>) => void;
   /** O servidor rola os dados e transmite o resultado. */
   roll: (input: RollRequest, ack: Ack<RollRecord>) => void;
+  /** Conjura um ritual da ficha: desconta PE/PD e transmite o resultado à mesa. */
+  'ritual:cast': (input: CastRitualInput, ack: Ack<RollRecord>) => void;
 }
 
 /** Eventos enviados pelo servidor. */

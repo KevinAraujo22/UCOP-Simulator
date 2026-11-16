@@ -1,0 +1,146 @@
+/* Ajustes de layout para o app de celular (reaproveita styles.css e table.css do site). */
+html,
+body,
+#root {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  padding: env(safe-area-inset-top) 0 0;
+}
+.server-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  background: #120f19;
+  border-bottom: 1px solid var(--border);
+}
+.server-bar a {
+  color: var(--accent);
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- mesa no celular */
+.mobile-table {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.mobile-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+.mobile-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.mobile-tabs {
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: #120f19;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mobile-tabs button {
+  flex: 1;
+  flex-direction: column;
+  gap: 0.1rem;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  padding: 0.55rem 0;
+  font-size: 0.78rem;
+}
+.mobile-tabs button span {
+  font-size: 1.15rem;
+}
+.mobile-tabs button.active {
+  color: var(--text);
+  background: rgba(139, 92, 246, 0.18);
+}
+
+/* A janela da ficha ocupa a área toda, sem moldura. */
+.mobile-sheet {
+  position: absolute;
+  inset: 0;
+}
+.mobile-sheet .sheet-window {
+  inset: 0;
+  border-radius: 0;
+  border: none;
+}
+.mobile-sheet .sheet-scroll {
+  padding: 0.75rem;
+}
+.mobile-sheet .sheet-titlebar {
+  padding: 0.4rem 0.6rem;
+}
+.mobile-sheet .sheet-name {
+  min-width: 0;
+  flex: 1 1 8rem;
+}
+
+/* Fichas em uma coluna, alvos de toque maiores. */
+@media (max-width: 860px) {
+  .sheet-header {
+    flex-direction: column;
+  }
+  .sheet-header-fields {
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+  .stat-row {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .skills-table td {
+    padding: 0.25rem 0.15rem;
+  }
+  .die-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  .resource-bar {
+    height: 2.6rem;
+  }
+  .resource-bar > button {
+    padding: 0 0.8rem;
+  }
+  .sheet-tabs {
+    position: sticky;
+    top: -0.75rem;
+    z-index: 2;
+    background: #121016;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .sheet-tabs button {
+    flex: none;
+  }
+  .picker-backdrop {
+    position: fixed;
+    align-items: end;
+    padding: 0;
+  }
+  .picker {
+    border-radius: 14px 14px 0 0;
+    max-height: 85vh;
+  }
+  .roll-spotlight {
+    bottom: 4.5rem;
+  }
+  .op2-attrs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

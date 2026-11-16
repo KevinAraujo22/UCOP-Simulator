@@ -15,7 +15,8 @@
     "build": "npm run build -w @ucop/web",
     "start": "npm run start -w @ucop/server",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build:exe": "node scripts/build-exe.mjs"
+    "build:exe": "node scripts/build-exe.mjs",
+    "build:apk": "node scripts/build-apk.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

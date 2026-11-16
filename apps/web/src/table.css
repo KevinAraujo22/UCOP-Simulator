@@ -1208,3 +1208,24 @@ button.outline {
   display: inline-block;
   vertical-align: middle;
 }
+
+.cast-dialog {
+  width: min(520px, 100%);
+}
+.cast-cost {
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.1);
+}
+.cast-cost.over {
+  background: rgba(239, 68, 68, 0.15);
+}
+.cast-cost .warn {
+  color: #fbbf24;
+}
+.roll-card.cast {
+  border-color: #7e22ce;
+}
+.cast-line {
+  font-size: 0.95rem;
+}

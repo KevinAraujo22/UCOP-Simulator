@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { SYSTEM_LABELS, type Sheet } from '@ucop/shared';
+import { useAssetUrl } from '../../asset';
 import { memberName, useGame } from '../../game';
 import { SHEET_DRAG_TYPE } from '../Board';
 import { unwrap } from '../../socket';
@@ -91,6 +92,11 @@ export function SheetWindow({
   );
 }
 
+function SheetAvatar({ sheet }: { sheet: Sheet }) {
+  const src = useAssetUrl((sheet.data as { portrait?: string | null }).portrait);
+  return src ? <img src={src} alt="" /> : <span className="sheet-avatar">{sheet.name.slice(0, 1).toUpperCase()}</span>;
+}
+
 /** Lista de fichas (personagens ou criaturas) com criação. */
 export function SheetsPanel({ creatures = false }: { creatures?: boolean }) {
   const { socket, role, members, sheets, campaign, flash, openSheet, userId } = useGame();
@@ -133,11 +139,7 @@ export function SheetsPanel({ creatures = false }: { creatures?: boolean }) {
                   e.dataTransfer.effectAllowed = 'copy';
                 }}
               >
-                {(s.data as { portrait?: string | null }).portrait ? (
-                  <img src={(s.data as { portrait: string }).portrait} alt="" />
-                ) : (
-                  <span className="sheet-avatar">{s.name.slice(0, 1).toUpperCase()}</span>
-                )}
+                <SheetAvatar sheet={s} />
                 <span className="grow left">
                   <strong>{s.name}</strong>
                   <span className="muted small">

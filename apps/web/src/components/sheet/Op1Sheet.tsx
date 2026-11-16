@@ -436,7 +436,14 @@ export function Op1SheetView({ sheet }: { sheet: Sheet }) {
             <Op1AbilitiesTab data={data} derived={derived} onChange={(v) => set('abilities', v)} costHint={`ex.: 2 ${resourceLabel}`} />
           )}
           {tab === 'rituais' && (
-            <RitualsTab sheet={sheet} rituals={data.rituals} onChange={(v) => set('rituals', v)} dt={derived.ritualDt} />
+            <RitualsTab
+              sheet={sheet}
+              rituals={data.rituals}
+              onChange={(v) => set('rituals', v)}
+              dt={derived.ritualDt}
+              resource={{ label: resourceLabel, current: det ? data.pd.current : data.pe.current }}
+              limit={derived.peLimit}
+            />
           )}
           {tab === 'inventario' && (
             <InventoryTab
@@ -833,15 +840,20 @@ function RitualsTab({
   rituals,
   onChange,
   dt,
+  resource,
+  limit,
 }: {
   sheet: Sheet;
   rituals: Op1Ritual[];
   onChange(v: Op1Ritual[]): void;
   dt: number;
+  resource: { label: string; current: number };
+  limit: number;
 }) {
   const { rollExpr } = useGame();
   const [filter, setFilter] = useState('');
   const [picker, setPicker] = useState(false);
+  const [casting, setCasting] = useState<Op1Ritual | null>(null);
   const update = (id: string, patch: Partial<Op1Ritual>) => onChange(rituals.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const taken = new Set(rituals.map((r) => r.ref));
   const blank = (): Op1Ritual => ({
@@ -891,17 +903,22 @@ function RitualsTab({
                 <>
                   <span className={`element-tag el-${r.element.toLowerCase()}`}>{`${r.element} ${r.circle}`.trim()}</span>{' '}
                   <span className="muted small">
-                    {RITUAL_BASE_COST[r.circle]} PE{r.execution && ` · ${r.execution}`}
+                    {RITUAL_BASE_COST[r.circle]} {resource.label}{r.execution && ` · ${r.execution}`}
                     {r.range && ` · ${r.range}`}
                   </span>
                 </>
               }
               extra={
-                r.roll ? (
-                  <button type="button" className="small" onClick={() => void rollExpr(r.roll, `${sheet.name} · ${r.name}`)}>
-                    Rolar {r.roll}
+                <div className="row">
+                  {r.roll && (
+                    <button type="button" className="small" onClick={() => void rollExpr(r.roll, `${sheet.name} · ${r.name}`)}>
+                      Rolar
+                    </button>
+                  )}
+                  <button type="button" className="small primary" onClick={() => setCasting(r)}>
+                    Conjurar
                   </button>
-                ) : undefined
+                </div>
               }
             >
               {cat && (
@@ -971,6 +988,9 @@ function RitualsTab({
             </Collapsible>
           );
         })}
+      {casting && (
+        <CastDialog sheet={sheet} ritual={casting} dt={dt} resource={resource} limit={limit} onClose={() => setCasting(null)} />
+      )}
       {picker && (
         <CatalogPicker
           title="Rituais"
@@ -978,7 +998,7 @@ function RitualsTab({
             id: r.id,
             name: r.name,
             group: r.elements.length > 1 ? 'Vários' : r.elements[0],
-            subtitle: `${r.circle}º círculo · ${RITUAL_BASE_COST[r.circle]} PE · ${r.execution} · ${r.range}`,
+            subtitle: `${r.circle}º círculo · ${RITUAL_BASE_COST[r.circle]} ${resource.label} · ${r.execution} · ${r.range}`,
             summary: r.summary,
             page: r.page,
             taken: taken.has(r.id),
@@ -1006,6 +1026,104 @@ function RitualsTab({
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Conjurar ritual
+// ---------------------------------------------------------------------------
+function CastDialog({
+  sheet,
+  ritual,
+  dt,
+  resource,
+  limit,
+  onClose,
+}: {
+  sheet: Sheet;
+  ritual: Op1Ritual;
+  dt: number;
+  resource: { label: string; current: number };
+  limit: number;
+  onClose(): void;
+}) {
+  const { castRitual } = useGame();
+  const cat = findRitual(ritual.ref);
+  const [form, setForm] = useState<'normal' | 'discente' | 'verdadeiro'>('normal');
+  const [adjust, setAdjust] = useState(0);
+  const [roll, setRoll] = useState(ritual.roll);
+  const [busy, setBusy] = useState(false);
+  const extra = form === 'discente' ? (cat?.discente ?? 0) : form === 'verdadeiro' ? (cat?.verdadeiro ?? 0) : 0;
+  const cost = Math.max(0, RITUAL_BASE_COST[ritual.circle] + extra + adjust);
+  const lacking = cost > resource.current;
+
+  return (
+    <div className="picker-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="picker cast-dialog" role="dialog" aria-label={`Conjurar ${ritual.name}`}>
+        <div className="row">
+          <h3 className="grow">Conjurar {ritual.name}</h3>
+          <button type="button" className="small" onClick={onClose} aria-label="Fechar">
+            ✕
+          </button>
+        </div>
+        <div className="row wrap small">
+          <span className={`element-tag el-${ritual.element.toLowerCase()}`}>
+            {ritual.element} {ritual.circle}
+          </span>
+          {ritual.execution && <span>Execução: {ritual.execution}</span>}
+          {ritual.range && <span>· Alcance: {ritual.range}</span>}
+          {ritual.resistance && <span>· Resistência: {ritual.resistance}</span>}
+          <span>· DT {dt}</span>
+        </div>
+        <div className="chips">
+          <button type="button" className={form === 'normal' ? 'active' : ''} onClick={() => setForm('normal')}>
+            Normal ({RITUAL_BASE_COST[ritual.circle]} {resource.label})
+          </button>
+          {cat?.discente ? (
+            <button type="button" className={form === 'discente' ? 'active' : ''} onClick={() => setForm('discente')}>
+              Discente (+{cat.discente})
+            </button>
+          ) : null}
+          {cat?.verdadeiro ? (
+            <button type="button" className={form === 'verdadeiro' ? 'active' : ''} onClick={() => setForm('verdadeiro')}>
+              Verdadeiro (+{cat.verdadeiro})
+            </button>
+          ) : null}
+        </div>
+        <div className="edit-grid two">
+          <label>
+            Ajuste no custo
+            <Num value={adjust} min={-20} max={20} onChange={setAdjust} title="Poderes que reduzem ou aumentam o custo" />
+          </label>
+          <label>
+            Rolagem do efeito (opcional)
+            <Txt value={roll} onChange={setRoll} placeholder="ex.: 3d8+3" className="mono" maxLength={100} />
+          </label>
+        </div>
+        <div className={`cast-cost ${lacking ? 'over' : ''}`}>
+          Custo: <strong>
+            {cost} {resource.label}
+          </strong>{' '}
+          · você tem {resource.current}
+          {cost > limit && <span className="warn"> · acima do seu limite por turno ({limit})</span>}
+        </div>
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || lacking}
+          onClick={() => {
+            setBusy(true);
+            void castRitual({ sheetId: sheet.id, ritualId: ritual.id, form, adjust, roll: roll.trim() || undefined })
+              .then((res) => {
+                if (res) onClose();
+              })
+              .finally(() => setBusy(false));
+          }}
+        >
+          {lacking ? `${resource.label} insuficientes` : 'Conjurar e enviar à mesa'}
+        </button>
+      </div>
     </div>
   );
 }

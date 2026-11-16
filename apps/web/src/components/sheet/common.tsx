@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Sheet, SheetData } from '@ucop/shared';
 import { uploadImage } from '../../api';
+import { useAssetUrl } from '../../asset';
 import { useGame } from '../../game';
 
 const SAVE_DELAY = 500;
@@ -285,9 +286,10 @@ export function Portrait({
 }) {
   const { campaign, flash } = useGame();
   const [busy, setBusy] = useState(false);
+  const src = useAssetUrl(url);
   return (
     <label className={`portrait ${disabled ? 'disabled' : ''}`} title={disabled ? undefined : 'Trocar retrato'}>
-      {url ? <img src={url} alt="Retrato" /> : <span className="muted small">{busy ? 'Enviando…' : 'Retrato'}</span>}
+      {src ? <img src={src} alt="Retrato" /> : <span className="muted small">{busy ? 'Enviando…' : 'Retrato'}</span>}
       {!disabled && (
         <input
           type="file"
